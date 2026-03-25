@@ -1,0 +1,112 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { AppShell } from "../../components/AppShell";
+import { loadWebState, purchaseOffer } from "../../lib/api";
+import { SectionCard } from "@court-cash/ui";
+import { ShopOffer, WebState } from "../../lib/api";
+
+export default function ShopPage() {
+  const [state, setState] = useState<WebState | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [purchasing, setPurchasing] = useState<string | null>(null);
+
+  const [isUsingFallback, setIsUsingFallback] = useState(false);
+
+  useEffect(() => {
+    console.log("Loading web state...");
+    loadWebState()
+      .then((data) => {
+        console.log("Loaded state:", data);
+        // Check if we're using fallback data by comparing with known demo values
+        const isFallback = data.shopOffers.length > 0 && data.shopOffers[0].id?.startsWith('demo-');
+        setIsUsingFallback(isFallback);
+        setState(data);
+      })
+      .catch((error) => {
+        console.error("Failed to load state:", error);
+        setIsUsingFallback(true);
+        setState(null);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handlePurchase = async (offerId: string) => {
+    if (!state) return;
+
+    setPurchasing(offerId);
+    try {
+      await purchaseOffer(offerId);
+      // Refresh state after purchase
+      const newState = await loadWebState();
+      setState(newState);
+    } catch (error) {
+      console.error("Purchase failed:", error);
+      alert("Purchase failed. Please try again.");
+    } finally {
+      setPurchasing(null);
+    }
+  };
+
+  if (loading || !state) {
+    return (
+      <AppShell>
+        <div className="loading">Loading shop...</div>
+      </AppShell>
+    );
+  }
+
+  const packOffers = state.shopOffers.filter((offer) => offer.offerType === "PACK");
+  const featuredOffers = state.shopOffers.filter((offer) => offer.offerType === "FEATURED_CARD");
+
+  return (
+    <AppShell>
+      <div style={{ marginBottom: '20px', padding: '10px', background: isUsingFallback ? '#ffe6e6' : '#e6ffe6', borderRadius: '8px' }}>
+        Status: {isUsingFallback ? 'Using Demo Data' : 'Connected to API'}
+      </div>
+      <SectionCard title="Pack Shop" eyebrow="Server-priced inventory">
+        <div className="offer-grid">
+          {packOffers.map((offer) => (
+            <article className="offer-card" key={offer.id}>
+              <p className="cc-eyebrow">{offer.packType}</p>
+              <h3>{offer.title}</h3>
+              <p>{offer.description}</p>
+              <div className="offer-footer">
+                <strong>{offer.price} CC</strong>
+                <button
+                  className="buy-button"
+                  onClick={() => handlePurchase(offer.id)}
+                  disabled={purchasing === offer.id || state.wallet.balance < offer.price}
+                >
+                  {purchasing === offer.id ? "Buying..." : "Buy Pack"}
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Featured Drops" eyebrow="Snapshot-bound cards">
+        <div className="offer-grid">
+          {featuredOffers.map((offer) => (
+            <article className="offer-card" key={offer.id}>
+              <p className="cc-eyebrow">{offer.tier}</p>
+              <h3>{offer.title}</h3>
+              <p>{offer.description}</p>
+              <div className="offer-footer">
+                <strong>{offer.price} CC</strong>
+                <button
+                  className="buy-button"
+                  onClick={() => handlePurchase(offer.id)}
+                  disabled={purchasing === offer.id || state.wallet.balance < offer.price}
+                >
+                  {purchasing === offer.id ? "Buying..." : "Buy Card"}
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </SectionCard>
+    </AppShell>
+  );
+}
