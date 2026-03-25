@@ -1,0 +1,16 @@
+{
+  "name": "court-cash-hq",
+  "private": true,
+  "packageManager": "pnpm@9.5.0",
+  "scripts": {
+    "dev:web": "pnpm --filter @court-cash/web dev",
+    "dev:mobile": "pnpm --filter @court-cash/mobile start",
+    "dev:api": "cd services/ranking && python3 -m uvicorn app.main:app --reload",
+    "build": "pnpm --filter @court-cash/domain build && pnpm --filter @court-cash/ui build && pnpm --filter @court-cash/web build",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

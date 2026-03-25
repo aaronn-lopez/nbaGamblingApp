@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "Court Cash HQ",
+    "slug": "court-cash-hq",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#f7f2e8"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

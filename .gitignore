@@ -1,0 +1,13 @@
+.DS_Store
+node_modules
+.pnpm-store
+.next
+dist
+coverage
+.expo
+.expo-shared
+*.tsbuildinfo
+__pycache__
+.pytest_cache
+.venv
+nba_game.db

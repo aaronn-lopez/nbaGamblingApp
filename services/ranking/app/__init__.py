@@ -1,0 +1,1 @@
+"""Court Cash ranking service."""
