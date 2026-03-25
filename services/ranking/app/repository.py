@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import hashlib
 import random
+import re
 import threading
 from collections import Counter, defaultdict
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
+from difflib import SequenceMatcher
 from typing import Any
 
 from .models import (
     AdminState,
+    AuthResponse,
     BuyListingRequest,
     CancelListingRequest,
     CardInstance,
@@ -52,8 +55,26 @@ class InMemoryGameStore:
         self._serial_numbers: dict[str, int] = defaultdict(int)
         self._seed()
 
-    def list_players(self) -> list[Player]:
-        return [deepcopy(self.players[snapshot.player_id]) for snapshot in self.ranking_snapshot.players]
+    def list_players(self, query: str | None = None, limit: int | None = None) -> list[Player]:
+        players = [deepcopy(self.players[snapshot.player_id]) for snapshot in self.ranking_snapshot.players]
+        if not query:
+            return players[:limit] if limit else players
+
+        normalized_query = _normalize_search_text(query)
+        if not normalized_query:
+            return players[:limit] if limit else players
+
+        scored_matches = sorted(
+            (
+                (_player_search_score(player, normalized_query), index, player)
+                for index, player in enumerate(players)
+            ),
+            key=lambda item: (-item[0], item[1]),
+        )
+
+        strong_matches = [player for score, _, player in scored_matches if score >= 200.0]
+        ordered_matches = strong_matches or [player for _, _, player in scored_matches[:5]]
+        return ordered_matches[:limit] if limit else ordered_matches
 
     def current_ranking(self) -> RankingSnapshot:
         return deepcopy(self.ranking_snapshot)
@@ -63,6 +84,9 @@ class InMemoryGameStore:
 
     def list_shop_offers(self) -> list[ShopOffer]:
         return [deepcopy(offer) for offer in self.shop_offers.values() if offer.active]
+
+    def list_pack_definitions(self) -> list[PackDefinition]:
+        return [deepcopy(definition) for definition in self.pack_definitions.values()]
 
     def list_marketplace_listings(self) -> list[MarketplaceListing]:
         self._expire_listings()
@@ -75,6 +99,11 @@ class InMemoryGameStore:
     def get_wallet_ledger(self, user_id: str) -> list[WalletLedgerEntry]:
         self._require_user(user_id)
         return [deepcopy(entry) for entry in self.wallet_ledger if entry.user_id == user_id]
+
+    def get_pack_inventory(self, user_id: str) -> dict[str, int]:
+        self._require_user(user_id)
+        inventory = self.pack_inventory[user_id]
+        return {pack_type: int(inventory.get(pack_type, 0)) for pack_type in self.pack_definitions}
 
     def get_user_cards(self, user_id: str) -> list[CardInstance]:
         self._require_user(user_id)
@@ -107,7 +136,7 @@ class InMemoryGameStore:
                 request.user_id,
                 200.0,
                 "DAILY_CLAIM",
-                "Daily login reward.",
+                "Daily bonus.",
             )
             return deepcopy(wallet)
 
@@ -118,9 +147,9 @@ class InMemoryGameStore:
             if not offer or not offer.active:
                 raise StoreError("Offer not found.", status_code=404)
 
-            self._debit(request.user_id, offer.price, "Insufficient Court Cash for purchase.")
+            self._debit(request.user_id, offer.price, "You don't have enough Court Cash for that yet.")
             entry_type = "PACK_PURCHASE" if offer.offer_type == "PACK" else "CARD_PURCHASE"
-            self._post_ledger(request.user_id, -offer.price, entry_type, f"Purchased {offer.title}.", offer.id)
+            self._post_ledger(request.user_id, -offer.price, entry_type, f"Bought {offer.title}.", offer.id)
 
             minted_card = None
             pack_inventory = None
@@ -232,7 +261,7 @@ class InMemoryGameStore:
             if listing.seller_user_id == request.user_id:
                 raise StoreError("Seller cannot buy their own listing.", status_code=409)
 
-            self._debit(request.user_id, listing.asking_price, "Insufficient Court Cash for listing.")
+            self._debit(request.user_id, listing.asking_price, "You don't have enough Court Cash for that yet.")
 
             seller_proceeds = round(listing.asking_price * (1 - self.marketplace_fee_rate), 2)
             fee_paid = round(listing.asking_price - seller_proceeds, 2)
@@ -278,7 +307,7 @@ class InMemoryGameStore:
                     id=f"notification-{len(self.notifications) + 1}",
                     user_id=listing.seller_user_id,
                     kind="SALE_COMPLETE",
-                    title="Listing sold",
+                    title="Card sold",
                     body=f"{listing.player_id} #{listing.serial_number} sold for {listing.asking_price} Court Cash.",
                     created_at=self._now(),
                     read=False,
@@ -309,7 +338,7 @@ class InMemoryGameStore:
                 display_name="Will Desai",
                 avatar_seed="midrange-sun",
                 home_court="Vancouver",
-                joined_at=datetime(2026, 3, 1, 8, 0, tzinfo=UTC),
+                joined_at=datetime(2026, 3, 1, 8, 0, tzinfo=UTC).isoformat(),
             ),
             "user-rival": UserProfile(
                 id="user-rival",
@@ -317,7 +346,7 @@ class InMemoryGameStore:
                 display_name="Baseline Boss",
                 avatar_seed="trade-floor",
                 home_court="Seattle",
-                joined_at=datetime(2026, 2, 20, 8, 0, tzinfo=UTC),
+                joined_at=datetime(2026, 2, 20, 8, 0, tzinfo=UTC).isoformat(),
             ),
             "system": UserProfile(
                 id="system",
@@ -325,7 +354,7 @@ class InMemoryGameStore:
                 display_name="Court Cash House",
                 avatar_seed="house-ledger",
                 home_court="Cloud",
-                joined_at=datetime(2026, 1, 1, 0, 0, tzinfo=UTC),
+                joined_at=datetime(2026, 1, 1, 0, 0, tzinfo=UTC).isoformat(),
             ),
         }
 
@@ -383,9 +412,9 @@ class InMemoryGameStore:
             for user_id in self.users
         }
         self.wallet_ledger: list[WalletLedgerEntry] = []
-        self._post_ledger("user-demo", 2000.0, "ONBOARDING_GRANT", "New account starter grant.")
-        self._post_ledger("user-rival", 2200.0, "ONBOARDING_GRANT", "New account starter grant.")
-        self._post_ledger("user-demo", 200.0, "DAILY_CLAIM", "Daily login reward.")
+        self._post_ledger("user-demo", 2000.0, "ONBOARDING_GRANT", "Welcome bonus.")
+        self._post_ledger("user-rival", 2200.0, "ONBOARDING_GRANT", "Welcome bonus.")
+        self._post_ledger("user-demo", 200.0, "DAILY_CLAIM", "Daily bonus.")
         self.wallets["user-demo"].last_claimed_at = datetime(2026, 3, 23, 8, 0, tzinfo=UTC)
 
         self.pack_definitions = {
@@ -393,7 +422,7 @@ class InMemoryGameStore:
                 id="pack-starter",
                 pack_type="STARTER",
                 title="Starter Crate",
-                description="One-time onboarding pack with three serialized pulls.",
+                description="A free starter pack with 3 player cards.",
                 price=0.0,
                 cards_per_pack=3,
                 odds_by_tier={
@@ -409,7 +438,7 @@ class InMemoryGameStore:
                 id="pack-common",
                 pack_type="COMMON",
                 title="Common Run",
-                description="Five cards with reliable bronze and silver density.",
+                description="A low-cost pack with 5 player cards.",
                 price=120.0,
                 cards_per_pack=5,
                 odds_by_tier={
@@ -425,7 +454,7 @@ class InMemoryGameStore:
                 id="pack-rare",
                 pack_type="RARE",
                 title="Rare Run",
-                description="Gold-heavy premium pack for weekly shoppers.",
+                description="A stronger pack with better odds for top players.",
                 price=560.0,
                 cards_per_pack=5,
                 odds_by_tier={
@@ -441,7 +470,7 @@ class InMemoryGameStore:
                 id="pack-legendary",
                 pack_type="LEGENDARY",
                 title="Legendary Vault",
-                description="High-end pack with elevated diamond exposure.",
+                description="The biggest pack, with your best shot at star cards.",
                 price=2200.0,
                 cards_per_pack=5,
                 odds_by_tier={
@@ -463,7 +492,7 @@ class InMemoryGameStore:
                 id="offer-pack-common",
                 offer_type="PACK",
                 title="Common Run",
-                description="Five cards with stable bronze and silver density.",
+                description="A low-cost pack with 5 player cards.",
                 price=120.0,
                 active=True,
                 pack_type="COMMON",
@@ -472,7 +501,7 @@ class InMemoryGameStore:
                 id="offer-pack-rare",
                 offer_type="PACK",
                 title="Rare Run",
-                description="Gold-heavy weekly premium pack.",
+                description="A stronger pack with better odds for top players.",
                 price=560.0,
                 active=True,
                 pack_type="RARE",
@@ -480,8 +509,8 @@ class InMemoryGameStore:
             "offer-featured-wemby": ShopOffer(
                 id="offer-featured-wemby",
                 offer_type="FEATURED_CARD",
-                title="Victor Wembanyama Spotlight",
-                description="One serialized weekly featured card minted off the active snapshot.",
+                title="Victor Wembanyama Special",
+                description="A one-of-a-kind Victor card for this week's shop.",
                 price=1350.0,
                 active=True,
                 player_id="victor-wembanyama",
@@ -523,8 +552,8 @@ class InMemoryGameStore:
                 id="notification-1",
                 user_id="user-demo",
                 kind="RANKING_REFRESH",
-                title="Week 13 rankings are live",
-                body="Victor Wembanyama climbed into the diamond line after a surge in recent PRA and pace-adjusted minutes.",
+                title="New player list is up",
+                body="Victor Wembanyama is one of the hottest cards in the game right now.",
                 created_at=datetime(2026, 3, 24, 6, 10, tzinfo=UTC),
                 read=False,
             )
@@ -650,6 +679,81 @@ class InMemoryGameStore:
     def _now(self) -> datetime:
         return datetime.now(tz=UTC)
 
+    def register_user(self, username: str, display_name: str = "", home_court: str = "") -> UserProfile:
+        with self._lock:
+            cleaned_username = _clean_username(username)
+            username_key = _normalize_username(username)
+            cleaned_display_name = " ".join(display_name.split()) or cleaned_username
+            cleaned_home_court = " ".join(home_court.split()) or "Unknown"
+
+            if not cleaned_username:
+                raise StoreError("Username is required.", status_code=422)
+
+            # Check if username already exists
+            if any(_normalize_username(user.username) == username_key for user in self.users.values()):
+                raise StoreError("Username already taken.", status_code=409)
+
+            # Create new user
+            user_id = f"user-{len(self.users) + 1}"
+            user = UserProfile(
+                id=user_id,
+                username=cleaned_username,
+                display_name=cleaned_display_name,
+                avatar_seed=cleaned_username.casefold(),
+                home_court=cleaned_home_court,
+                joined_at=self._now().isoformat(),
+            )
+            self.users[user_id] = user
+
+            # Create wallet for new user
+            self.wallets[user_id] = WalletBalance(user_id=user_id, balance=0.0, last_claimed_at=None)
+            self._post_ledger(user_id, 2000.0, "ONBOARDING_GRANT", "Welcome bonus.")
+
+            # Give starter pack
+            self.pack_inventory[user_id].update({"STARTER": 1})
+
+            return user
+
+    def login_user(self, username: str) -> AuthResponse:
+        with self._lock:
+            username_key = _normalize_username(username)
+
+            # Find user by username
+            user = None
+            for u in self.users.values():
+                if _normalize_username(u.username) == username_key:
+                    user = u
+                    break
+
+            if not user:
+                raise StoreError("We couldn't find that username.", status_code=401)
+
+            token = f"token-{user.id}-{int(self._now().timestamp())}"
+
+            return AuthResponse(
+                user=user,
+                token=token,
+                wallet=deepcopy(self._require_wallet(user.id)),
+            )
+
+    def get_current_user(self, token: str) -> UserProfile:
+        with self._lock:
+            # Extract user ID from token (simple implementation)
+            if not token.startswith("token-"):
+                raise StoreError("Invalid token.", status_code=401)
+
+            parts = token.split("-")
+            if len(parts) < 3:
+                raise StoreError("Invalid token.", status_code=401)
+
+            user_id = f"{parts[1]}-{parts[2]}"  # Reconstruct user ID
+
+            user = self.users.get(user_id)
+            if not user:
+                raise StoreError("User not found.", status_code=401)
+
+            return user
+
 
 def _seed_from_key(value: str) -> int:
     digest = hashlib.sha256(value.encode("utf-8")).hexdigest()
@@ -660,3 +764,51 @@ def _roll_tier(rng: random.Random, odds_by_tier: dict[str, float]) -> str:
     tiers = list(odds_by_tier.keys())
     weights = list(odds_by_tier.values())
     return rng.choices(tiers, weights=weights, k=1)[0]
+
+
+def _clean_username(value: str) -> str:
+    return " ".join(value.split())
+
+
+def _normalize_username(value: str) -> str:
+    return _clean_username(value).casefold()
+
+
+def _normalize_search_text(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
+
+
+def _token_similarity_score(query_token: str, candidate_token: str) -> float:
+    if query_token == candidate_token:
+        return 220.0
+
+    length_delta = abs(len(candidate_token) - len(query_token))
+    if candidate_token.startswith(query_token) or query_token.startswith(candidate_token):
+        return max(0.0, 190.0 - (length_delta * 10.0))
+    if query_token in candidate_token or candidate_token in query_token:
+        return max(0.0, 160.0 - (length_delta * 10.0))
+
+    return SequenceMatcher(None, query_token, candidate_token).ratio() * 150.0
+
+
+def _player_search_score(player: Player, normalized_query: str) -> float:
+    normalized_name = _normalize_search_text(player.full_name)
+    normalized_slug = _normalize_search_text(player.slug)
+    condensed_query = normalized_query.replace(" ", "")
+    condensed_name = normalized_name.replace(" ", "")
+
+    if normalized_query in {normalized_name, normalized_slug}:
+        return 1_000.0
+
+    score = 0.0
+    if normalized_query in normalized_name or normalized_query in normalized_slug:
+        score += 500.0
+
+    name_tokens = normalized_name.split()
+    query_tokens = normalized_query.split()
+    for query_token in query_tokens:
+        score += max((_token_similarity_score(query_token, token) for token in name_tokens), default=0.0)
+
+    score += SequenceMatcher(None, normalized_query, normalized_name).ratio() * 220.0
+    score += SequenceMatcher(None, condensed_query, condensed_name).ratio() * 160.0
+    return score

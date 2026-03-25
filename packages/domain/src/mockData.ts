@@ -239,7 +239,7 @@ export const packDefinitions: PackDefinition[] = [
     id: "pack-starter",
     packType: "STARTER",
     title: "Starter Crate",
-    description: "One-time onboarding grant with rookie-safe odds and three serialized pulls.",
+    description: "A free starter pack with 3 player cards.",
     price: 0,
     cardsPerPack: 3,
     oddsByTier: {
@@ -255,7 +255,7 @@ export const packDefinitions: PackDefinition[] = [
     id: "pack-common",
     packType: "COMMON",
     title: "Common Run",
-    description: "Entry pack for daily grinders with five cards and a steady bronze floor.",
+    description: "A low-cost pack with 5 player cards.",
     price: 120,
     cardsPerPack: 5,
     oddsByTier: {
@@ -271,7 +271,7 @@ export const packDefinitions: PackDefinition[] = [
     id: "pack-rare",
     packType: "RARE",
     title: "Rare Run",
-    description: "Five-card premium pack tuned for gold and platinum inventory.",
+    description: "A stronger pack with better odds for top players.",
     price: 560,
     cardsPerPack: 5,
     oddsByTier: {
@@ -287,7 +287,7 @@ export const packDefinitions: PackDefinition[] = [
     id: "pack-legendary",
     packType: "LEGENDARY",
     title: "Legendary Vault",
-    description: "High-stakes premium pack with elevated diamond exposure and founders-card odds.",
+    description: "The biggest pack, with your best shot at star cards.",
     price: 2200,
     cardsPerPack: 5,
     oddsByTier: {
@@ -306,7 +306,7 @@ export const shopOffers: ShopOffer[] = [
     id: "offer-pack-common",
     offerType: "PACK",
     title: "Common Run",
-    description: "Five cards with stable bronze and silver density.",
+    description: "A low-cost pack with 5 player cards.",
     price: 120,
     active: true,
     packType: "COMMON"
@@ -315,7 +315,7 @@ export const shopOffers: ShopOffer[] = [
     id: "offer-pack-rare",
     offerType: "PACK",
     title: "Rare Run",
-    description: "Gold-heavy weekly premium pack.",
+    description: "A stronger pack with better odds for top players.",
     price: 560,
     active: true,
     packType: "RARE"
@@ -323,8 +323,8 @@ export const shopOffers: ShopOffer[] = [
   {
     id: "offer-featured-wemby",
     offerType: "FEATURED_CARD",
-    title: "Victor Wembanyama Spotlight",
-    description: "One serialized weekly featured card minted off the latest ranking snapshot.",
+    title: "Victor Wembanyama Special",
+    description: "A one-of-a-kind Victor card for this week's shop.",
     price: 1350,
     active: true,
     playerId: "victor-wembanyama",
@@ -333,8 +333,8 @@ export const shopOffers: ShopOffer[] = [
   {
     id: "offer-featured-brunson",
     offerType: "FEATURED_CARD",
-    title: "Jalen Brunson Spotlight",
-    description: "Budget featured card for the active rotation tier.",
+    title: "Jalen Brunson Special",
+    description: "A featured Jalen card at a lower price.",
     price: 680,
     active: true,
     playerId: "jalen-brunson",
@@ -375,7 +375,7 @@ export const walletLedger: WalletLedgerEntry[] = [
     userId: "user-demo",
     amount: 2000,
     entryType: "ONBOARDING_GRANT",
-    description: "New account starter grant.",
+    description: "Welcome bonus.",
     createdAt: "2026-03-01T08:05:00Z"
   },
   {
@@ -383,7 +383,7 @@ export const walletLedger: WalletLedgerEntry[] = [
     userId: "user-rival",
     amount: 2200,
     entryType: "ONBOARDING_GRANT",
-    description: "New account starter grant.",
+    description: "Welcome bonus.",
     createdAt: "2026-02-20T08:05:00Z"
   },
   {
@@ -391,7 +391,7 @@ export const walletLedger: WalletLedgerEntry[] = [
     userId: "user-demo",
     amount: -120,
     entryType: "PACK_PURCHASE",
-    description: "Purchased Common Run.",
+    description: "Bought Common Run.",
     createdAt: "2026-03-21T08:00:00Z",
     relatedEntityId: "offer-pack-common"
   },
@@ -416,8 +416,8 @@ export const notifications: Notification[] = [
     id: "notice-1",
     userId: "user-demo",
     kind: "RANKING_REFRESH",
-    title: "Week 13 rankings are live",
-    body: "Victor Wembanyama climbed into the diamond line after a surge in recent PRA and pace-adjusted minutes.",
+    title: "New player list is up",
+    body: "Victor Wembanyama is one of the hottest cards in the game right now.",
     createdAt: "2026-03-24T06:10:00Z",
     read: false
   },
@@ -426,11 +426,26 @@ export const notifications: Notification[] = [
     userId: "user-rival",
     kind: "SALE_COMPLETE",
     title: "Anthony Edwards sold",
-    body: "Your Anthony Edwards #72 sold for 910 Court Cash. Fee withheld automatically.",
+    body: "Your Anthony Edwards #72 sold for 910 Court Cash.",
     createdAt: "2026-03-24T09:12:00Z",
     read: false
   }
 ];
+
+export const packInventoryByUser = {
+  "user-demo": {
+    STARTER: 1,
+    COMMON: 1,
+    RARE: 0,
+    LEGENDARY: 0
+  },
+  "user-rival": {
+    STARTER: 0,
+    COMMON: 2,
+    RARE: 1,
+    LEGENDARY: 0
+  }
+};
 
 export function getDemoAppState(): DemoAppState {
   return {
@@ -444,7 +459,8 @@ export function getDemoAppState(): DemoAppState {
     marketplacePurchases: [],
     wallets,
     walletLedger,
-    notifications
+    notifications,
+    packInventoryByUser
   };
 }
 

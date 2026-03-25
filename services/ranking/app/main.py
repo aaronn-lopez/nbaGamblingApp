@@ -1,26 +1,31 @@
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .models import (
     AdminState,
+    AuthResponse,
     BuyListingRequest,
     CancelListingRequest,
     CardInstance,
     CreateListingRequest,
     DailyClaimRequest,
+    LoginRequest,
     MarketplaceListing,
     MarketplacePurchase,
     Notification,
     OfferPurchaseResult,
+    PackDefinition,
     PackOpenRequest,
     PackOpenResult,
     Player,
     RankingSnapshot,
+    RegisterRequest,
     ShopOffer,
     ShopPurchaseRequest,
+    UserProfile,
     WalletBalance,
     WalletLedgerEntry,
 )
@@ -46,14 +51,31 @@ async def store_error_handler(_: Request, error: StoreError) -> JSONResponse:
     return JSONResponse({"detail": error.message}, status_code=error.status_code)
 
 
-@app.get("/health")
-def healthcheck() -> dict[str, str]:
-    return {"status": "ok"}
+@app.get("/test")
+def test_endpoint(store: InMemoryGameStore = Depends(get_store)):
+    user = store.users.get("user-demo")
+    return {"user": user, "type": str(type(user))}
+
+
+@app.get("/test-auth", response_model=AuthResponse)
+def test_auth_endpoint(store: InMemoryGameStore = Depends(get_store)):
+    user = store.users.get("user-demo")
+    wallet = store.wallets.get("user-demo")
+    return AuthResponse(user=user, token="test-token", wallet=wallet)
+
+
+@app.get("/test-simple")
+def test_simple_endpoint():
+    return {"token": "test-token"}
 
 
 @app.get("/v1/players", response_model=list[Player])
-def list_players(store: InMemoryGameStore = Depends(get_store)) -> list[Player]:
-    return store.list_players()
+def list_players(
+    query: str | None = Query(default=None),
+    limit: int | None = Query(default=None, ge=1, le=50),
+    store: InMemoryGameStore = Depends(get_store),
+) -> list[Player]:
+    return store.list_players(query=query, limit=limit)
 
 
 @app.get("/v1/rankings/current", response_model=RankingSnapshot)
@@ -82,6 +104,19 @@ def list_notifications(
 @app.get("/v1/shop/offers", response_model=list[ShopOffer])
 def get_shop_offers(store: InMemoryGameStore = Depends(get_store)) -> list[ShopOffer]:
     return store.list_shop_offers()
+
+
+@app.get("/v1/packs/definitions", response_model=list[PackDefinition])
+def get_pack_definitions(store: InMemoryGameStore = Depends(get_store)) -> list[PackDefinition]:
+    return store.list_pack_definitions()
+
+
+@app.get("/v1/packs/inventory", response_model=dict[str, int])
+def get_pack_inventory(
+    user_id: str = Query(...),
+    store: InMemoryGameStore = Depends(get_store),
+) -> dict[str, int]:
+    return store.get_pack_inventory(user_id)
 
 
 @app.post("/v1/shop/offers/{offer_id}/purchase", response_model=OfferPurchaseResult)
@@ -156,3 +191,32 @@ def claim_daily(
 @app.get("/v1/admin/state", response_model=AdminState)
 def get_admin_state(store: InMemoryGameStore = Depends(get_store)) -> AdminState:
     return store.get_admin_state()
+
+
+@app.post("/v1/auth/register", response_model=AuthResponse)
+def register_user(
+    request: RegisterRequest,
+    store: InMemoryGameStore = Depends(get_store),
+) -> AuthResponse:
+    store.register_user(request.username, request.display_name, request.home_court)
+    return store.login_user(request.username)
+
+
+@app.post("/v1/auth/login", response_model=AuthResponse)
+def login_user(
+    request: LoginRequest,
+    store: InMemoryGameStore = Depends(get_store),
+) -> AuthResponse:
+    return store.login_user(request.username)
+
+
+@app.get("/v1/auth/me", response_model=UserProfile)
+def get_current_user(
+    authorization: str = Header(None),
+    store: InMemoryGameStore = Depends(get_store),
+) -> UserProfile:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+
+    token = authorization.replace("Bearer ", "")
+    return store.get_current_user(token)

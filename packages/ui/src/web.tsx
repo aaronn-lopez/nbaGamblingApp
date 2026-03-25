@@ -74,13 +74,13 @@ export function PlayerSpotlight({
   return (
     <article className="cc-player-spotlight">
       <div>
-        <p className="cc-eyebrow">{snapshot.tier}</p>
+        <p className="cc-eyebrow">{formatTierLabel(snapshot.tier)}</p>
         <h3>{player.fullName}</h3>
         <p>{subtitle}</p>
       </div>
       <dl>
         <div>
-          <dt>Projection</dt>
+          <dt>Score</dt>
           <dd>{snapshot.playerPowerScore}</dd>
         </div>
         <div>
@@ -113,7 +113,7 @@ export function CardShelf({
           return (
             <article className="cc-collectible" key={card.id}>
               <p className="cc-eyebrow">
-                {card.tierAtMint} · #{card.serialNumber}
+                {formatTierLabel(card.tierAtMint)} · #{card.serialNumber}
               </p>
               <h4>{player?.fullName ?? card.playerId}</h4>
               <p>
@@ -137,13 +137,17 @@ export function ListingRow({
   return (
     <article className="cc-listing-row">
       <div>
-        <p className="cc-eyebrow">{listing.tierAtMint}</p>
+        <p className="cc-eyebrow">{formatTierLabel(listing.tierAtMint)}</p>
         <h4>{player?.fullName ?? listing.playerId}</h4>
         <p>
-          #{listing.serialNumber} · expires {new Date(listing.expiresAt).toLocaleDateString()}
+          #{listing.serialNumber} · closes {new Date(listing.expiresAt).toLocaleDateString()}
         </p>
       </div>
       <strong>{listing.askingPrice} CC</strong>
     </article>
   );
+}
+
+function formatTierLabel(value: string): string {
+  return value.charAt(0) + value.slice(1).toLowerCase();
 }

@@ -1,6 +1,7 @@
 import { AppShell } from "../../components/AppShell";
 import { getPlayerMap, loadWebState } from "../../lib/api";
 import { ListingRow, MetricRibbon, SectionCard } from "@court-cash/ui";
+import { formatBalance } from "../../lib/formatting";
 
 export default async function MarketplacePage() {
   const state = await loadWebState();
@@ -13,12 +14,12 @@ export default async function MarketplacePage() {
   return (
     <AppShell>
       <section className="hero compact">
-        <MetricRibbon label="Marketplace fee" value="5%" />
-        <MetricRibbon label="Average ask" value={`${averageAsk} CC`} tone="cool" />
-        <MetricRibbon label="Settlement mode" value="Atomic" tone="gold" />
+        <MetricRibbon label="Selling fee" value="5%" />
+        <MetricRibbon label="Average price" value={formatBalance(averageAsk)} tone="cool" />
+        <MetricRibbon label="Cards for sale" value={String(state.marketplaceListings.length)} tone="gold" />
       </section>
 
-      <SectionCard title="Live Listings" eyebrow="Fixed-price market">
+      <SectionCard title="Cards for Sale" eyebrow="See what other players are selling">
         <div className="listing-stack">
           {state.marketplaceListings.map((listing) => (
             <ListingRow key={listing.id} listing={listing} player={playerMap.get(listing.playerId)} />

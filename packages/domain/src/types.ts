@@ -7,6 +7,7 @@ export type CardTier =
   | "IRON";
 
 export type PackType = "STARTER" | "COMMON" | "RARE" | "LEGENDARY";
+export type PackInventory = Partial<Record<PackType, number>>;
 
 export type ShopOfferType = "PACK" | "FEATURED_CARD";
 
@@ -184,6 +185,13 @@ export interface Notification {
   read: boolean;
 }
 
+export interface OfferPurchaseResult {
+  offer: ShopOffer;
+  wallet: WalletBalance;
+  packInventory?: PackInventory;
+  mintedCard?: CardInstance;
+}
+
 export interface DemoAppState {
   users: UserProfile[];
   rankingSnapshot: RankingSnapshot;
@@ -196,4 +204,5 @@ export interface DemoAppState {
   wallets: WalletBalance[];
   walletLedger: WalletLedgerEntry[];
   notifications: Notification[];
+  packInventoryByUser: Record<string, PackInventory>;
 }

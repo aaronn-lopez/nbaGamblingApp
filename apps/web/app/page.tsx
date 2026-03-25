@@ -1,11 +1,27 @@
-import { getPlayerMap, getSnapshotMap, loadWebState } from "../lib/api";
+'use client';
+
+import { useEffect, useState } from "react";
+import { getPlayerMap, loadWebState, WebState } from "../lib/api";
 import { AppShell } from "../components/AppShell";
 import { CardShelf, ListingRow, MetricRibbon, PlayerSpotlight, SectionCard } from "@court-cash/ui";
+import { formatBalance, formatSignedBalance, formatWalletEntryLabel } from "../lib/formatting";
 
-export default async function HomePage() {
-  const state = await loadWebState();
+export default function HomePage() {
+  const [state, setState] = useState<WebState | null>(null);
+
+  useEffect(() => {
+    loadWebState().then(setState).catch(() => setState(null));
+  }, []);
+
+  if (!state) {
+    return (
+      <AppShell>
+        <div className="loading">Loading home...</div>
+      </AppShell>
+    );
+  }
+
   const playerMap = getPlayerMap(state.players);
-  const snapshotMap = getSnapshotMap(state.rankingSnapshot);
   const topPlayer = state.rankingSnapshot.players[0];
   const topPerformer = playerMap.get(topPlayer.playerId);
 
@@ -13,17 +29,16 @@ export default async function HomePage() {
     <AppShell>
       <section className="hero">
         <div className="hero-copy">
-          <p className="cc-eyebrow">Mobile-first collectible market</p>
-          <h2>Trade serialized NBA cards across web and mobile with a weekly predictive ranking engine.</h2>
+          <p className="cc-eyebrow">Build your collection</p>
+          <h2>Open packs, buy the players you want, and watch your balance as you go.</h2>
           <p>
-            The economy runs on Court Cash, every pack mint is tied to a published ranking snapshot, and every
-            market purchase settles through the backend ledger.
+            Start with free Court Cash, open your starter pack, and keep tabs on your cards in one place.
           </p>
         </div>
         <div className="hero-ribbons">
-          <MetricRibbon label="Live wallet" value={`${state.wallet.balance} CC`} />
-          <MetricRibbon label="Weekly model" value={state.rankingSnapshot.modelVersion} tone="cool" />
-          <MetricRibbon label="Listings" value={String(state.marketplaceListings.length)} tone="gold" />
+          <MetricRibbon label="Your balance" value={formatBalance(state.wallet.balance)} />
+          <MetricRibbon label="Items in shop" value={String(state.shopOffers.length)} tone="cool" />
+          <MetricRibbon label="Cards for sale" value={String(state.marketplaceListings.length)} tone="gold" />
         </div>
       </section>
 
@@ -32,24 +47,24 @@ export default async function HomePage() {
           <PlayerSpotlight
             player={topPerformer}
             snapshot={topPlayer}
-            subtitle={`${topPerformer.team} ${topPerformer.position} leads the Week 13 projection board.`}
+            subtitle={`${topPerformer.fullName} is one of the hottest names in the game right now.`}
           />
         ) : null}
-        <SectionCard title="Release shape" eyebrow="What ships now">
+        <SectionCard title="How it works" eyebrow="Quick start">
           <ul className="plain-list">
-            <li>Serialized cards with immutable tier at mint.</li>
-            <li>Weekly predictive rankings published after the Sunday slate.</li>
-            <li>Pack shop, featured shop drops, and fixed-price player listings.</li>
-            <li>Shared contracts across web, mobile, and API service.</li>
+            <li>Create a username and get free Court Cash.</li>
+            <li>Open your starter pack or buy another pack from the shop.</li>
+            <li>Keep the cards you like and watch your collection grow.</li>
+            <li>Check the players page to see who is moving up.</li>
           </ul>
         </SectionCard>
       </div>
 
-      <SectionCard title="Collection Preview" eyebrow="Demo inventory">
-        <CardShelf title="Will Desai" cards={state.cards} players={playerMap} />
+      <SectionCard title="Your Cards" eyebrow={`${state.profile.displayName} · ${state.cards.length} cards`}>
+        <CardShelf title="Collection" cards={state.cards} players={playerMap} />
       </SectionCard>
 
-      <SectionCard title="Market Pulse" eyebrow="Active listings">
+      <SectionCard title="Cards People Are Selling" eyebrow="Card market">
         <div className="listing-stack">
           {state.marketplaceListings.map((listing) => (
             <ListingRow key={listing.id} listing={listing} player={playerMap.get(listing.playerId)} />
@@ -57,12 +72,12 @@ export default async function HomePage() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Ledger Preview" eyebrow="Court Cash">
+      <SectionCard title="Recent Money Moves" eyebrow="Your balance">
         <div className="ledger-grid">
           {state.walletLedger.slice(0, 4).map((entry) => (
             <article className="ledger-card" key={entry.id}>
-              <p className="cc-eyebrow">{entry.entryType.replaceAll("_", " ")}</p>
-              <h3>{entry.amount > 0 ? `+${entry.amount}` : `${entry.amount}`} CC</h3>
+              <p className="cc-eyebrow">{formatWalletEntryLabel(entry.entryType)}</p>
+              <h3>{formatSignedBalance(entry.amount)}</h3>
               <p>{entry.description}</p>
             </article>
           ))}

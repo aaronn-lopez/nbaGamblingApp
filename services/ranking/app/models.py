@@ -42,6 +42,31 @@ class Player(CamelModel):
     position: str
 
 
+class UserProfile(CamelModel):
+    id: str
+    username: str
+    display_name: str
+    avatar_seed: str
+    home_court: str
+    joined_at: str
+
+
+class LoginRequest(CamelModel):
+    username: str
+
+
+class RegisterRequest(CamelModel):
+    username: str
+    display_name: str
+    home_court: str = ""
+
+
+class AuthResponse(CamelModel):
+    user: UserProfile
+    token: str
+    wallet: "WalletBalance"
+
+
 class PlayerFeatureSet(CamelModel):
     recent_pra: float
     season_pra: float
@@ -169,15 +194,6 @@ class WalletLedgerEntry(CamelModel):
     description: str
     created_at: datetime
     related_entity_id: str | None = None
-
-
-class UserProfile(CamelModel):
-    id: str
-    username: str
-    display_name: str
-    avatar_seed: str
-    home_court: str
-    joined_at: datetime
 
 
 class Notification(CamelModel):

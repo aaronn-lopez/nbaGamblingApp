@@ -15,8 +15,8 @@ const displayFont = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Court Cash HQ",
-  description: "Mobile-first NBA card marketplace game with weekly predictive rankings."
+  title: "Court Cash",
+  description: "Collect NBA player cards, buy packs, and track your balance."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
